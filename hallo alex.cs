@@ -334,7 +334,7 @@ class Program
 
     static void Main(string[] args)
     {
-        lines = File.ReadAllLines("input.txt");
+        lines = File.ReadAllLines("in_level-3_0-example.txt");
         index = 0;
 
         // Kaufbare Moleküle
