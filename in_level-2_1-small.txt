@@ -1,0 +1,90 @@
+34
+2 -> C6H5NH2
+2 -> CH3COOH
+1 -> C2H5OH
+8 -> CrO3
+10 -> H2O
+6 -> K
+10 -> Cl2
+2 -> NO2
+9 -> C6H5OH
+3 -> CO2
+3 -> C6H6
+7 -> H2
+9 -> O2
+10 -> Zn
+10 -> CH3OH
+8 -> CO
+6 -> NiO
+3 -> C6H12O6
+10 -> Ca
+6 -> CH4
+3 -> C7H8
+6 -> C6H7NO
+10 -> C4H6O3
+8 -> CuO
+7 -> C3H8
+10 -> NaCl
+10 -> H2SO4
+4 -> CaCO3
+9 -> HCl
+9 -> H2S
+4 -> C2H4
+5 -> Pt
+10 -> MnO2
+1 -> Ni
+
+10
+2
+1 C6H5NH2, 1 CH3COOH -> 1 C8H9NO, 1 H2O
+3 C2H5OH, 2 CrO3 -> 3 CH3CHO, 1 Cr2O3, 3 H2O
+
+4
+2 H2O -> 2 H2, 1 O2
+2 K, 1 Cl2 -> 2 KCl
+3 NO2, 1 H2O -> 2 HNO3, 1 NO
+1 C6H5OH, 1 CO2 -> 1 C7H6O3
+
+5
+1 C6H6, 1 Cl2 -> 1 C6H5Cl, 1 HCl
+2 H2, 1 O2 -> 2 H2O
+2 Zn, 1 O2 -> 2 ZnO
+1 CH3OH, 1 CO -> 1 CH3COOH
+1 CO2, 1 H2O -> 1 H2CO3
+
+5
+1 NiO, 1 H2 -> 1 Ni, 1 H2O
+2 C6H12O6 -> 1 C12H22O11, 1 H2O
+1 Ca, 1 Cl2 -> 1 CaCl2
+1 CH4, 1 Cl2 -> 1 CH3Cl, 1 HCl
+1 CO2, 1 H2 -> 1 HCOOH
+
+3
+1 C6H12O6 -> 2 C2H5OH, 2 CO2
+3 NO2, 1 H2O -> 2 HNO3, 1 NO
+2 C7H8, 3 O2 -> 2 C6H5COOH, 2 H2O
+
+3
+1 C6H7NO, 1 C4H6O3 -> 1 C8H9NO2, 1 CH3COOH
+1 Ca, 1 Cl2 -> 1 CaCl2
+1 CH3OH, 1 CuO -> 1 CH2O, 1 Cu, 1 H2O
+
+2
+1 C3H8 -> 1 C3H6, 1 H2
+2 NaCl, 1 H2SO4 -> 1 Na2SO4, 2 HCl
+
+3
+1 CaCO3 -> 1 CaO, 1 CO2
+1 CuO, 1 H2SO4 -> 1 CuSO4, 1 H2O
+1 C2H5OH, 1 HCl -> 1 C2H5Cl, 1 H2O
+
+3
+2 H2S, 3 O2 -> 2 SO2, 2 H2O
+1 CH4, 1 H2O -> 1 CO, 3 H2
+1 C2H5OH, 1 O2 -> 1 CH3COOH, 1 H2O
+
+3
+1 C2H4, 1 H2, 1 Pt -> 1 C2H6, 1 Pt
+1 MnO2, 1 H2 -> 1 MnO, 1 H2O
+1 C6H5OH, 3 H2, 1 Ni -> 1 C6H11OH, 1 Ni
+

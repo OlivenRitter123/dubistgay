@@ -8,9 +8,10 @@ class Program
 {
     static void Main(string[] args)
     {
-        string[] lines = File.ReadAllLines("in_level-1_0-example.txt");
+        string[] lines = File.ReadAllLines("input.txt");
         int index = 0;
 
+        // Nächste nicht-leere Zeile lesen
         string NextLine()
         {
             while (index < lines.Length &&
@@ -22,69 +23,119 @@ class Program
             return lines[index++].Trim();
         }
 
+        // Molekülliste lesen
+        Dictionary<string, long> ParseMolecules(string text)
+        {
+            Dictionary<string, long> molecules = new();
+
+            foreach (string part in text.Split(','))
+            {
+                string[] pieces = part.Trim().Split(
+                    ' ',
+                    StringSplitOptions.RemoveEmptyEntries
+                );
+
+                long amount = long.Parse(pieces[0]);
+                string name = pieces[1];
+
+                if (!molecules.ContainsKey(name))
+                    molecules[name] = 0;
+
+                molecules[name] += amount;
+            }
+
+            return molecules;
+        }
+
+        // Preise einlesen
+        int m = int.Parse(NextLine());
+
+        Dictionary<string, long> prices = new();
+
+        for (int i = 0; i < m; i++)
+        {
+            string[] parts = NextLine().Split("->");
+
+            long price = long.Parse(parts[0].Trim());
+            string name = parts[1].Trim();
+
+            prices[name] = price;
+        }
+
+        // Anzahl der Testfälle
         int n = int.Parse(NextLine());
-        List<string> results = new List<string>();
+
+        List<string> results = new();
 
         for (int i = 0; i < n; i++)
         {
-            Dictionary<string, long> inventory =
-                new Dictionary<string, long>();
+            // Neues, leeres Inventar
+            Dictionary<string, long> inventory = new();
 
-            List<string> order = new List<string>();
+            long totalCost = 0;
 
-            void Change(string name, long amount)
+            int r = int.Parse(NextLine());
+
+            // Alle Reaktionen durchführen
+            for (int j = 0; j < r; j++)
             {
-                if (!inventory.ContainsKey(name))
+                string reaction = NextLine();
+                string[] sides = reaction.Split("->");
+
+                var inputs = ParseMolecules(sides[0]);
+                var outputs = ParseMolecules(sides[1]);
+
+                // Benötigte Moleküle verbrauchen
+                foreach (var molecule in inputs)
                 {
-                    inventory[name] = 0;
-                    order.Add(name);
+                    string name = molecule.Key;
+                    long needed = molecule.Value;
+
+                    long available = inventory.ContainsKey(name)
+                        ? inventory[name]
+                        : 0;
+
+                    if (available < needed)
+                    {
+                        // Fehlende Moleküle kaufen
+                        long missing = needed - available;
+
+                        totalCost += missing * prices[name];
+
+                        inventory[name] = 0;
+                    }
+                    else
+                    {
+                        inventory[name] = available - needed;
+                    }
                 }
 
-                inventory[name] += amount;
-            }
-
-            void ParseMolecules(string text, int sign)
-            {
-                string[] molecules = text.Split(',');
-
-                foreach (string molecule in molecules)
+                // Produzierte Moleküle hinzufügen
+                foreach (var molecule in outputs)
                 {
-                    string[] parts = molecule.Trim().Split(
-                        ' ',
-                        StringSplitOptions.RemoveEmptyEntries
-                    );
+                    string name = molecule.Key;
+                    long amount = molecule.Value;
 
-                    long count = long.Parse(parts[0]);
-                    string name = parts[1];
+                    if (!inventory.ContainsKey(name))
+                        inventory[name] = 0;
 
-                    Change(name, count * sign);
+                    inventory[name] += amount;
                 }
             }
 
-            // Inventar einlesen
-            ParseMolecules(NextLine(), 1);
-
-            // Reaktion einlesen
-            string reaction = NextLine();
-            string[] sides = reaction.Split("->");
-
-            // Moleküle entfernen
-            ParseMolecules(sides[0], -1);
-
-            // Moleküle hinzufügen
-            ParseMolecules(sides[1], 1);
-
-            // Ergebnis erstellen
-            string result = string.Join(", ",
-                order
-                    .Where(name => inventory[name] > 0)
-                    .Select(name => $"{inventory[name]} {name}")
+            // Inventar ausgeben
+            string resultInventory = string.Join(", ",
+                inventory
+                    .Where(x => x.Value > 0)
+                    .OrderByDescending(x => x.Value)
+                    .ThenBy(x => x.Key, StringComparer.Ordinal)
+                    .Select(x => $"{x.Value} {x.Key}")
             );
 
-            results.Add(result);
+            results.Add($"{totalCost} -> {resultInventory}");
         }
 
-        // Datei schreiben
+        // Ausgabedatei erstellen
         File.WriteAllLines("output.txt", results);
 
         Console.WriteLine("Fertig! output.txt erstellt.");
