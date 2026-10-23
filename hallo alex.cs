@@ -10,6 +10,16 @@ class Reaction
     public string Text = "";
     public Dictionary<string, long> Input = new();
     public Dictionary<string, long> Output = new();
+
+    public long In(string name)
+    {
+        return Input.GetValueOrDefault(name);
+    }
+
+    public long Out(string name)
+    {
+        return Output.GetValueOrDefault(name);
+    }
 }
 
 class State
@@ -20,7 +30,7 @@ class State
 
     public long Get(string name)
     {
-        return Inventory.GetValueOrDefault(name, 0);
+        return Inventory.GetValueOrDefault(name);
     }
 
     public State Copy()
@@ -45,53 +55,89 @@ class Program
 {
     static Dictionary<string, long> prices = new();
     static List<Reaction> reactions = new();
+
     static Dictionary<string, List<Reaction>> producers = new();
     static Dictionary<string, double> estimates = new();
 
     static string[] lines = Array.Empty<string>();
     static int index = 0;
 
+    static string targetName = "";
+
+    const int MaxSteps = 1000000;
+
+    // Nächste nicht-leere Zeile
     static string NextLine()
     {
         while (index < lines.Length &&
                string.IsNullOrWhiteSpace(lines[index]))
+        {
             index++;
+        }
 
         if (index >= lines.Length)
-            throw new Exception("Unerwartetes Dateiende");
+            throw new Exception("Unerwartetes Dateiende!");
 
         return lines[index++].Trim();
     }
 
-    static Dictionary<string, long> Parse(string text)
+    // Molekülliste einlesen
+    static Dictionary<string, long> ParseMolecules(string text)
     {
         Dictionary<string, long> result = new();
 
         foreach (string part in text.Split(','))
         {
-            string[] p = part.Trim().Split(
-                ' ', StringSplitOptions.RemoveEmptyEntries);
+            string value = part.Trim();
 
-            if (p.Length < 2)
+            if (value.Length == 0)
                 continue;
 
-            long count = long.Parse(p[0]);
+            string[] p = value.Split(
+                ' ', StringSplitOptions.RemoveEmptyEntries);
+
+            long amount = long.Parse(p[0]);
             string name = p[1];
 
-            result[name] = result.GetValueOrDefault(name) + count;
+            result[name] =
+                result.GetValueOrDefault(name) + amount;
         }
 
         return result;
     }
 
+    // Ziel einlesen: 24C6H12O6 oder 24 C6H12O6
+    static (long count, string name) ParseTarget(string text)
+    {
+        text = text.Trim();
+
+        Match match = Regex.Match(
+            text,
+            @"^(\d+)\s*([A-Za-z][A-Za-z0-9]*)$"
+        );
+
+        if (match.Success)
+        {
+            return (
+                long.Parse(match.Groups[1].Value),
+                match.Groups[2].Value
+            );
+        }
+
+        // Ohne Anzahl bedeutet 1
+        return (1, text);
+    }
+
+    // Ungefähre Herstellungskosten ermitteln
     static void CalculateEstimates()
     {
         estimates.Clear();
 
         foreach (var p in prices)
+        {
             estimates[p.Key] = p.Value;
+        }
 
-        // Geschätzte Herstellungskosten berechnen
         for (int i = 0; i < 100; i++)
         {
             bool changed = false;
@@ -104,13 +150,13 @@ class Program
                 foreach (var input in r.Input)
                 {
                     if (!estimates.TryGetValue(
-                        input.Key, out double value))
+                        input.Key, out double price))
                     {
                         possible = false;
                         break;
                     }
 
-                    cost += input.Value * value;
+                    cost += input.Value * price;
                 }
 
                 if (!possible)
@@ -118,10 +164,11 @@ class Program
 
                 foreach (var output in r.Output)
                 {
-                    double unitCost = cost / output.Value;
+                    double unitCost =
+                        cost / output.Value;
 
                     if (!estimates.ContainsKey(output.Key) ||
-                        unitCost < estimates[output.Key] - 0.0000001)
+                        unitCost < estimates[output.Key] - 0.000001)
                     {
                         estimates[output.Key] = unitCost;
                         changed = true;
@@ -134,80 +181,109 @@ class Program
         }
     }
 
+    // Reaktion nach geschätzten Kosten bewerten
     static double Score(
-        State state, Reaction r, string target, long needed)
+        State state,
+        Reaction r,
+        string name,
+        long needed)
     {
         double cost = 0;
 
         foreach (var input in r.Input)
         {
             long missing = Math.Max(
-                0, input.Value - state.Get(input.Key));
+                0,
+                input.Value - state.Get(input.Key)
+            );
 
             if (missing == 0)
                 continue;
 
             if (!estimates.TryGetValue(
-                input.Key, out double unitCost))
+                input.Key, out double price))
+            {
                 return double.PositiveInfinity;
+            }
 
-            cost += missing * unitCost;
+            cost += missing * price;
         }
 
-        long outputCount = r.Output[target];
-        long missingTarget = Math.Max(
-            1, needed - state.Get(target));
+        long gain = r.Out(name) - r.In(name);
 
-        return cost / Math.Min(outputCount, missingTarget);
+        if (gain <= 0)
+            return double.PositiveInfinity;
+
+        long remaining = Math.Max(
+            1,
+            needed - state.Get(name)
+        );
+
+        return cost / Math.Min(gain, remaining);
     }
 
+    // Moleküle im Inventar sicherstellen
     static bool Ensure(
         State state,
         string name,
         long needed,
         HashSet<string> active,
-        bool allowBuying)
+        bool canBuy)
     {
         if (state.Get(name) >= needed)
             return true;
 
-        bool canBuy = allowBuying && prices.ContainsKey(name);
+        bool buyable =
+            canBuy && prices.ContainsKey(name);
 
-        // Zyklen vermeiden
+        // Zyklische Reaktionen verhindern
         if (active.Contains(name))
-            return canBuy;
+            return buyable;
 
         active.Add(name);
 
         try
         {
+            int attempts = 0;
+
             while (state.Get(name) < needed)
             {
-                if (state.Steps.Count >= 1000000)
+                attempts++;
+
+                if (attempts > MaxSteps ||
+                    state.Steps.Count >= MaxSteps)
+                {
                     return false;
+                }
 
                 List<Reaction> options = new();
 
-                if (producers.TryGetValue(name, out var available))
+                if (producers.TryGetValue(
+                    name, out var available))
                 {
                     options = available
                         .Where(r =>
-                            r.Output[name] >
-                            r.Input.GetValueOrDefault(name))
-                        .OrderBy(r => Score(state, r, name, needed))
+                            r.Out(name) > r.In(name))
+                        .Where(r =>
+                            name == targetName ||
+                            !r.Input.ContainsKey(targetName))
+                        .OrderBy(r =>
+                            Score(state, r, name, needed))
                         .ToList();
                 }
 
-                double bestScore = options.Count > 0
+                double bestScore =
+                    options.Count > 0
                     ? Score(state, options[0], name, needed)
                     : double.PositiveInfinity;
 
-                // Kaufen ist billiger als Herstellen:
-                // Der eigentliche Kauf erfolgt bei der Reaktion.
-                if (canBuy && prices[name] <= bestScore)
+                // Günstiger direkt kaufen
+                if (buyable && prices[name] <= bestScore)
+                {
                     return true;
+                }
 
-                bool produced = false;
+                bool successful = false;
 
                 foreach (Reaction r in options)
                 {
@@ -217,15 +293,20 @@ class Program
                     if (Execute(state, r, active) &&
                         state.Get(name) > before)
                     {
-                        produced = true;
+                        successful = true;
                         break;
                     }
 
+                    // Fehlgeschlagenen Versuch rückgängig machen
                     state.Restore(backup);
                 }
 
-                if (!produced)
-                    return canBuy;
+                if (!successful)
+                {
+                    // Falls Herstellung nicht klappt:
+                    // kaufen, sofern erlaubt
+                    return buyable;
+                }
             }
 
             return true;
@@ -236,108 +317,132 @@ class Program
         }
     }
 
+    // Eine Reaktion ausführen
     static bool Execute(
         State state,
         Reaction r,
         HashSet<string> active)
     {
-        // Benötigte Zwischenprodukte herstellen
-        foreach (var input in r.Input)
-        {
-            if (!Ensure(
-                state, input.Key, input.Value, active, true))
-                return false;
-        }
+        if (state.Steps.Count >= MaxSteps)
+            return false;
 
-        // Prüfen, ob alle nicht kaufbaren Stoffe da sind
-        for (int attempt = 0;
-             attempt <= r.Input.Count * 3;
-             attempt++)
+        // Zwischenprodukte herstellen
+        // Mehrere Durchläufe wegen Abhängigkeiten
+        for (int pass = 0;
+             pass < r.Input.Count + 2;
+             pass++)
         {
-            bool missing = false;
+            foreach (var input in r.Input)
+            {
+                if (state.Get(input.Key) >= input.Value)
+                    continue;
+
+                bool ok = Ensure(
+                    state,
+                    input.Key,
+                    input.Value,
+                    active,
+                    true
+                );
+
+                if (!ok)
+                    return false;
+            }
+
+            // Alle nicht kaufbaren Stoffe vorhanden?
+            bool ready = true;
 
             foreach (var input in r.Input)
             {
-                if (prices.ContainsKey(input.Key))
-                    continue;
-
-                if (state.Get(input.Key) < input.Value)
+                if (state.Get(input.Key) < input.Value &&
+                    !prices.ContainsKey(input.Key))
                 {
-                    missing = true;
-
-                    if (!Ensure(
-                        state, input.Key, input.Value,
-                        active, false))
-                        return false;
+                    ready = false;
+                    break;
                 }
             }
 
-            if (!missing)
+            if (ready)
                 break;
+
+            if (pass == r.Input.Count + 1)
+                return false;
         }
 
-        // Fehlende kaufbare Moleküle automatisch kaufen
+        // Fehlende kaufbare Stoffe kaufen
         foreach (var input in r.Input)
         {
             long available = state.Get(input.Key);
-            long missing = Math.Max(0, input.Value - available);
+
+            long missing = Math.Max(
+                0,
+                input.Value - available
+            );
 
             if (missing > 0)
             {
                 if (!prices.TryGetValue(
                     input.Key, out long price))
+                {
                     return false;
+                }
 
                 state.Cost += missing * price;
             }
         }
 
-        // Eingabemoleküle verbrauchen
+        // Reaktionsstoffe verbrauchen
         foreach (var input in r.Input)
         {
             state.Inventory[input.Key] =
-                Math.Max(0, state.Get(input.Key) - input.Value);
+                Math.Max(
+                    0,
+                    state.Get(input.Key) - input.Value
+                );
         }
 
-        // Produkte ins Inventar legen
+        // Produkte hinzufügen
         foreach (var output in r.Output)
         {
             state.Inventory[output.Key] =
                 state.Get(output.Key) + output.Value;
         }
 
-        // Ausgeführte Reaktion speichern
+        // Reaktion für Ausgabedatei merken
         state.Steps.Add(r.Text);
 
         return true;
     }
 
-    static (long count, string name) ParseTarget(string text)
-    {
-        text = text.Trim();
-
-        // Akzeptiert "24C6H12O6", "24 C6H12O6"
-        // und "C2H5OH" (automatisch Menge 1)
-        Match match = Regex.Match(
-            text, @"^(\d+)\s*([A-Za-z][A-Za-z0-9]*)$");
-
-        if (match.Success)
-        {
-            return (
-                long.Parse(match.Groups[1].Value),
-                match.Groups[2].Value
-            );
-        }
-
-        return (1, text);
-    }
-
+    // Hauptprogramm
     static void Main(string[] args)
     {
-        lines = File.ReadAllLines("in_level-3_0-example.txt");
+        // ======================================
+        // HIER KANNST DU DEN DATEIPFAD ÄNDERN
+        // ======================================
+
+        string inputFile =
+            args.Length > 0 ? args[0] : "input.txt";
+
+        string outputFile =
+            args.Length > 1 ? args[1] : "output.txt";
+
+        if (!File.Exists(inputFile))
+        {
+            Console.WriteLine(
+                "Datei nicht gefunden: " +
+                Path.GetFullPath(inputFile)
+            );
+            return;
+        }
+
+        lines = File.ReadAllLines(inputFile);
         index = 0;
 
-        // Kaufbare Moleküle
+        // ======================================
+        // 1. KAUFBARE MOLEKÜLE
+        // ======================================
+
         int m = int.Parse(NextLine());
 
         for (int i = 0; i < m; i++)
@@ -350,7 +455,10 @@ class Program
             prices[name] = price;
         }
 
-        // Mögliche Reaktionen
+        // ======================================
+        // 2. ALLE VERFÜGBAREN REAKTIONEN
+        // ======================================
+
         int rCount = int.Parse(NextLine());
 
         for (int i = 0; i < rCount; i++)
@@ -358,68 +466,108 @@ class Program
             string line = NextLine();
             string[] sides = line.Split("->");
 
-            Reaction r = new Reaction
-            {
-                Text = line,
-                Input = Parse(sides[0]),
-                Output = Parse(sides[1])
-            };
+            Reaction r = new Reaction();
+
+            r.Text = line;
+            r.Input = ParseMolecules(sides[0]);
+            r.Output = ParseMolecules(sides[1]);
 
             reactions.Add(r);
 
-            foreach (string name in r.Output.Keys)
+            foreach (string molecule in r.Output.Keys)
             {
-                if (!producers.ContainsKey(name))
-                    producers[name] = new List<Reaction>();
+                if (!producers.ContainsKey(molecule))
+                {
+                    producers[molecule] =
+                        new List<Reaction>();
+                }
 
-                producers[name].Add(r);
+                producers[molecule].Add(r);
             }
         }
 
+        // Geschätzte Preise berechnen
         CalculateEstimates();
 
-        // Zielmoleküle
+        // ======================================
+        // 3. ZIELMOLEKÜLE
+        // ======================================
+
         int n = int.Parse(NextLine());
 
-        List<string> paragraphs = new();
+        List<string> results = new();
 
         for (int i = 0; i < n; i++)
         {
             var target = ParseTarget(NextLine());
 
+            targetName = target.name;
+
+            // Für jeden Fall neues Inventar
             State state = new State();
+
+            HashSet<string> active = new();
 
             bool success = Ensure(
                 state,
                 target.name,
                 target.count,
-                new HashSet<string>(),
+                active,
                 false
             );
 
-            if (!success || state.Get(target.name) < target.count)
+            // Ergebnis kontrollieren
+            if (!success ||
+                state.Get(target.name) < target.count)
             {
-                throw new Exception(
-                    "Keine Reaktionsfolge gefunden für " +
-                    target.name
+                Console.WriteLine(
+                    "FEHLER bei Fall " + (i + 1)
                 );
+
+                Console.WriteLine(
+                    "Keine Reaktionsfolge gefunden für " +
+                    target.count + " " + target.name
+                );
+
+                return;
             }
 
-            paragraphs.Add(string.Join("\n", state.Steps));
+            // Nur Reaktionen ausgeben
+            results.Add(
+                string.Join("\n", state.Steps)
+            );
 
             Console.WriteLine(
-                $"Fall {i + 1}: {target.count} {target.name}, " +
-                $"Kosten: {state.Cost}, " +
-                $"Reaktionen: {state.Steps.Count}"
+                "Fall " + (i + 1) + " fertig"
             );
+
+            Console.WriteLine(
+                "Ziel: " + target.count +
+                " " + target.name
+            );
+
+            Console.WriteLine(
+                "Kosten: " + state.Cost
+            );
+
+            Console.WriteLine(
+                "Reaktionen: " + state.Steps.Count
+            );
+
+            Console.WriteLine();
         }
 
-        // Leere Zeile zwischen den Testfällen
+        // ======================================
+        // 4. OUTPUT DATEI ERSTELLEN
+        // ======================================
+
         File.WriteAllText(
-            "output.txt",
-            string.Join("\n\n", paragraphs) + "\n"
+            outputFile,
+            string.Join("\n\n", results) + "\n"
         );
 
-        Console.WriteLine("Fertig! output.txt erstellt.");
+        Console.WriteLine(
+            "FERTIG! Datei erstellt: " + outputFile
+        );
     }
 }
