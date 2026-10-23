@@ -8,7 +8,7 @@ class Program
 {
     static void Main(string[] args)
     {
-        string[] lines = File.ReadAllLines("input.txt");
+        string[] lines = File.ReadAllLines("in_level-2_2-large.txt");
         int index = 0;
 
         // Nächste nicht-leere Zeile lesen
